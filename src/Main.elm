@@ -2,6 +2,7 @@ module Main exposing (Msg(..), getXml, init, main, subscriptions, update, view, 
 
 import Browser
 import Element exposing (Element, alignLeft, alignRight, centerY, column, el, fill, padding, rgb255, row, spacing, text, width)
+import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Html exposing (Attribute, Html)
@@ -90,11 +91,22 @@ subscriptions model =
 
 view : Model -> Html Msg
 view model =
-    Element.layout []
+    Element.layout
+        [ Background.color <| rgb255 12 20 31
+        , Font.color <| rgb255 230 255 255
+        , Font.family [ Font.typeface "Roboto", Font.sansSerif ]
+        ]
         (column
             [ width fill ]
-            [ el [ width fill, padding 20, Font.size 30 ] <| text "Radiology Dashboard"
-            , viewTable model
+            [ el
+                [ width fill
+                , padding 20
+                , Font.size 30
+                , Font.family [ Font.typeface "Orbitron", Font.sansSerif ]
+                ]
+              <|
+                text "Radiology Dashboard"
+            , el [ padding 10 ] <| viewTable model
             ]
         )
 
@@ -109,75 +121,94 @@ headerBorder =
         }
 
 
-headerSpacing : Element.Attribute Msg
-headerSpacing =
-    Element.padding 10
+headerPadding : Element.Attribute Msg
+headerPadding =
+    Element.paddingEach { top = 10, right = 5, left = 5, bottom = 15 }
+
+
+rowPadding : Element.Attribute Msg
+rowPadding =
+    Element.paddingEach { top = 20, right = 5, left = 5, bottom = 5 }
 
 
 viewTable : Model -> Element Msg
 viewTable model =
-    Element.table []
+    Element.table
+        [ padding 20
+        , Border.color <| rgb255 111 195 223
+        , Border.width 2
+        , Border.rounded 10
+        ]
         { data = model
         , columns =
-            [ { header = el [ headerBorder, headerSpacing ] <| text "Exam Type"
+            [ { header = el [ headerBorder, headerPadding, Font.center ] <| text "Modality"
               , width = fill
               , view =
                     \study ->
-                        el [ padding 10, spacing 10 ] <| text study.examType
+                        el [ rowPadding, Font.center ] <| text study.examType
               }
-            , { header = el [ headerBorder, headerSpacing ] <| text "Site"
+            , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Site"
               , width = fill
               , view =
                     \study ->
-                        el [ padding 10, spacing 10, alignLeft ] <| text study.site
+                        el [ rowPadding, Font.center ] <| text study.site
               }
-            , { header = el [ headerBorder, headerSpacing ] <| text "Description"
+            , { header = el [ headerBorder, headerPadding, Font.alignLeft ] <| text "Description"
               , width = fill
               , view =
                     \study ->
-                        el [ padding 10, spacing 10, Font.alignLeft ] <| text study.description
+                        el [ rowPadding, Font.alignLeft ] <| text study.description
               }
-            , { header = el [ headerBorder, headerSpacing ] <| text "Name"
+            , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Name"
               , width = fill
               , view =
                     \study ->
-                        el [ padding 10, spacing 10, Font.alignLeft ] <| text "John Doe"
+                        el [ rowPadding, Font.center ] <| text "John Doe"
               }
-            , { header = el [ headerBorder, headerSpacing ] <| text "NHI"
+            , { header = el [ headerBorder, headerPadding, Font.center ] <| text "NHI"
               , width = fill
               , view =
                     \study ->
-                        el [ padding 10, spacing 10 ] <| text "NHI0000"
+                        el [ rowPadding, Font.center ] <| text "NHI0000"
               }
-            , { header = el [ headerBorder, headerSpacing ] <| text "Urgency"
+            , { header = el [ headerBorder, headerPadding ] <| text "Urgency"
               , width = fill
               , view =
                     \study ->
-                        el [ padding 10, spacing 10 ] <| text study.urgency
+                        el [ rowPadding, Font.color <| rgb255 223 116 12 ] <| text study.urgency
               }
-            , { header = el [ headerBorder, headerSpacing ] <| text "Appt Time"
+            , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Appt Time"
               , width = fill
               , view =
                     \study ->
-                        el [ padding 10, spacing 10 ] <| text study.apptTime
+                        el [ rowPadding, Font.center ] <| text study.apptTime
               }
-            , { header = el [ headerBorder, headerSpacing ] <| text "Patient Type"
+            , { header = el [ headerBorder, headerPadding ] <| text "Pt Type"
               , width = fill
               , view =
                     \study ->
-                        el [ padding 10, spacing 10 ] <| text study.patientType
+                        el [ rowPadding, Font.center ] <| text study.patientType
               }
-            , { header = el [ headerBorder, headerSpacing ] <| text "Patient Location"
+            , { header = el [ headerBorder, headerPadding ] <| text "Pt Location"
               , width = fill
               , view =
                     \study ->
-                        el [ padding 10, spacing 10 ] <| text study.patientLoc
+                        el [ rowPadding, Font.center ] <| text study.patientLoc
               }
-            , { header = el [ headerBorder, headerSpacing ] <| text "Triage Status"
+            , { header = el [ headerBorder, headerPadding ] <| text "Triage Status"
               , width = fill
               , view =
                     \study ->
-                        el [ padding 10, spacing 10 ] <| text study.triageStatus
+                        el [ rowPadding ] <|
+                            el
+                                [ Font.size 15
+                                , Font.color <| rgb255 0 0 0
+                                , Background.color <| rgb255 0 255 0
+                                , padding 3
+                                , Border.rounded 5
+                                ]
+                            <|
+                                text study.triageStatus
               }
             ]
         }
