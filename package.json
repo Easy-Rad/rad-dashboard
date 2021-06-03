@@ -1,0 +1,27 @@
+{
+  "name": "rad-dashboard",
+  "version": "0.1.0",
+  "description": "This project is bootstrapped with [Create Elm App](https://github.com/halfzebra/create-elm-app).",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "create-elm-app": "^5.22.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "elm-app build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tubo/rad-dashboard.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Tubo/rad-dashboard/issues"
+  },
+  "homepage": "https://github.com/Tubo/rad-dashboard#readme"
+}
