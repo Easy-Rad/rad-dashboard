@@ -82,13 +82,19 @@ update msg model =
                     ( { model | studies = referrals }, Cmd.none )
 
                 Err error ->
-                    ( Debug.log ("Error" ++ error) Model [] "all", Cmd.none )
+                    ( -- Debug.log ("Error" ++ error)
+                      Model [] "all"
+                    , Cmd.none
+                    )
 
         FilterModality modality ->
             ( { model | modality = modality }, Cmd.none )
 
         _ ->
-            ( Debug.log "Unmatched message type" model, Cmd.none )
+            ( -- Debug.log "Unmatched message type"
+              model
+            , Cmd.none
+            )
 
 
 
@@ -387,7 +393,8 @@ triageCategoryDecoder =
                     9
 
                 _ ->
-                    Debug.log ("Unknown triage category (status): " ++ triage) 99
+                    -- Debug.log ("Unknown triage category (status): " ++ triage)
+                    99
     in
     Decode.map parseTriageCategory string
 
