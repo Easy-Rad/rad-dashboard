@@ -187,7 +187,7 @@ view model =
                 , Font.family [ Font.typeface "Orbitron", Font.sansSerif ]
                 ]
               <|
-                text "Radiology Dashboard"
+                text "Radiology Dashboard (testing with anonymised data)"
             , row [ padding 30, spacing 20 ]
                 [ Input.button [] { onPress = Just <| FilterModality "ALL", label = text "All" }
                 , Input.button [] { onPress = Just <| FilterModality "XR", label = text "XR" }
