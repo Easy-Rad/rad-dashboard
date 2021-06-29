@@ -279,7 +279,7 @@ rowPadding =
 dateFormatter : Time.Zone -> Time.Posix -> String
 dateFormatter =
     DateFormat.format
-        [ DateFormat.dayOfMonthNumber
+        [ DateFormat.dayOfMonthFixed
         , DateFormat.text "/"
         , DateFormat.monthNumber
         , DateFormat.text "/"
@@ -301,7 +301,14 @@ viewTable time studies =
               , width = fill |> maximum 50
               , view =
                     \study ->
-                        el [ rowPadding, Font.center ] <| text study.examType
+                        el
+                            [ rowPadding
+                            , Font.center
+                            , Font.family [ Font.monospace ]
+                            , Font.size 16
+                            ]
+                        <|
+                            text study.examType
               }
             , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Name"
               , width = fill
@@ -310,16 +317,30 @@ viewTable time studies =
                         el [ rowPadding, Font.center ] <| text study.patientName
               }
             , { header = el [ headerBorder, headerPadding, Font.center ] <| text "NHI"
-              , width = fill
+              , width = fill |> maximum 100 |> minimum 50
               , view =
                     \study ->
-                        el [ rowPadding, Font.center ] <| text study.nhi
+                        el
+                            [ rowPadding
+                            , Font.center
+                            , Font.family [ Font.monospace ]
+                            , Font.size 16
+                            ]
+                        <|
+                            el
+                                [ Background.color (rgb255 223 116 12)
+                                , Border.rounded 5
+                                , Font.color (rgb255 0 0 0)
+                                , centerX
+                                , padding 3
+                                ]
+                                (text study.nhi)
               }
             , { header = el [ headerBorder, headerPadding, Font.alignLeft ] <| text "Examination"
               , width = fill |> maximum 1000 |> minimum 50
               , view =
                     \study ->
-                        el [ rowPadding, Font.alignLeft, Element.clipX ] <| text study.description
+                        el [ rowPadding, Font.alignLeft, Font.extraBold, Element.clipX ] <| text study.description
               }
             , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Referral Time"
               , width = fill
@@ -327,7 +348,15 @@ viewTable time studies =
                     \study ->
                         case study.apptTime of
                             Just referralTime ->
-                                el [ rowPadding, Font.center ] <| text (dateFormatter nz_zone referralTime)
+                                el
+                                    [ rowPadding
+                                    , Font.center
+                                    , Font.family [ Font.monospace ]
+                                    , Font.extraLight
+                                    , Font.size 16
+                                    ]
+                                <|
+                                    text (dateFormatter nz_zone referralTime)
 
                             Nothing ->
                                 el [ rowPadding, Font.center ] <| text ""
@@ -336,7 +365,14 @@ viewTable time studies =
               , width = fill
               , view =
                     \study ->
-                        el [ rowPadding, Font.color <| rgb255 223 116 12, Font.center ] <|
+                        el
+                            [ rowPadding
+                            , Font.color <| rgb255 223 116 12
+                            , Font.center
+                            , Font.family [ Font.monospace ]
+                            , Font.size 16
+                            ]
+                        <|
                             text <|
                                 triageCategoryToString study.triage
               }
@@ -344,7 +380,14 @@ viewTable time studies =
               , width = fill
               , view =
                     \study ->
-                        el [ rowPadding, Font.center ] <| text study.patientLoc
+                        el
+                            [ rowPadding
+                            , Font.center
+                            , Font.family [ Font.monospace ]
+                            , Font.size 16
+                            ]
+                        <|
+                            text study.patientLoc
               }
             , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Due in"
               , width = fill
@@ -366,7 +409,14 @@ viewTable time studies =
                                         else
                                             0.0
                                 in
-                                el [ rowPadding, Font.center, Background.color (rgba255 255 0 0 alpha) ] <|
+                                el
+                                    [ rowPadding
+                                    , Font.center
+                                    , Font.size 18
+                                    , height fill
+                                    , Background.color (rgba255 255 0 0 alpha)
+                                    ]
+                                <|
                                     text (DateFormat.Relative.relativeTime time due)
 
                             Nothing ->
