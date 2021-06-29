@@ -319,7 +319,7 @@ viewTable time studies =
               , width = fill |> maximum 1000 |> minimum 50
               , view =
                     \study ->
-                        el [ rowPadding, Font.alignLeft ] <| text study.description
+                        el [ rowPadding, Font.alignLeft, Element.clipX ] <| text study.description
               }
             , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Referral Time"
               , width = fill
