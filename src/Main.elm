@@ -332,10 +332,34 @@ view model =
                 ]
                 (text (dateFormatter nz_zone model.time))
             , row [ padding 30, spacing 20, centerX ]
-                [ Input.button [] { onPress = Just <| FilterModality "ALL", label = text "All" }
-                , Input.button [] { onPress = Just <| FilterModality "XR", label = text "XR" }
-                , Input.button [] { onPress = Just <| FilterModality "CT", label = text "CT" }
-                , Input.button [] { onPress = Just <| FilterModality "MR", label = text "MR" }
+                [ Input.button
+                    [ Border.width 1
+                    , Border.rounded 5
+                    , Border.glow (rgb255 255 255 255) 0.5
+                    , padding 5
+                    ]
+                    { onPress = Just <| FilterModality "ALL", label = text "All" }
+                , Input.button
+                    [ Border.width 1
+                    , Border.rounded 5
+                    , Border.glow (rgb255 255 255 255) 0.5
+                    , padding 5
+                    ]
+                    { onPress = Just <| FilterModality "XR", label = text "XR" }
+                , Input.button
+                    [ Border.width 1
+                    , Border.rounded 5
+                    , Border.glow (rgb255 255 255 255) 0.5
+                    , padding 5
+                    ]
+                    { onPress = Just <| FilterModality "CT", label = text "CT" }
+                , Input.button
+                    [ Border.width 1
+                    , Border.rounded 5
+                    , Border.glow (rgb255 255 255 255) 0.5
+                    , padding 5
+                    ]
+                    { onPress = Just <| FilterModality "MR", label = text "MR" }
                 ]
             , el
                 [ padding 5
