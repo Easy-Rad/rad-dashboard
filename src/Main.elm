@@ -1,7 +1,6 @@
 module Main exposing (Msg(..), getXml, init, main, subscriptions, update, view, viewTable, xmlDecoder)
 
 import Browser
-import Date exposing (Date)
 import DateFormat
 import DateFormat.Relative
 import Element exposing (Element, alignBottom, alignLeft, alignRight, alignTop, centerX, centerY, column, el, fill, fillPortion, height, maximum, minimum, padding, paddingXY, rgb255, rgba255, row, scrollbarX, scrollbarY, scrollbars, shrink, spacing, text, width)
@@ -18,7 +17,7 @@ import Iso8601
 import Task
 import Time
 import TimeZone
-import Xml.Decode as XD exposing (Decoder, int, list, maybe, oneOf, optionalPath, path, requiredPath, run, single, string, succeed)
+import Xml.Decode as XD exposing (Decoder, int, list, maybe, oneOf, optionalPath, path, requiredPath, single, string, succeed)
 import XmlParser as Xml
 
 
@@ -322,7 +321,10 @@ view model =
                 , viewModalityButton "MR" "MR"
                 ]
             , viewTable model.time studies
-            , el [ centerX, padding 10, Font.size 16 ] (text "Christchurch Hospital - Department of Radiology")
+            , column [ centerX, padding 10, Font.size 12, spacing 5 ]
+                [ el [ Font.center, centerX ] (text " Christchurch Hospital")
+                , el [ Font.center, centerX ] (text "Department of Radiology")
+                ]
             ]
         )
 
