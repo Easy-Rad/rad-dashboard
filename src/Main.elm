@@ -189,7 +189,7 @@ filterByModality modality studies =
 
 sortByScore : List Study -> List Study
 sortByScore studies =
-    studies |> List.sortWith (by .triage ASC |> andThen patientTypeScore ASC)
+    studies |> List.sortWith (by .triage ASC |> andThen patientTypeScore ASC |> andThen sortByWaitingTime ASC)
 
 
 patientTypeScore : Study -> Int
@@ -203,6 +203,16 @@ patientTypeScore study =
 
         _ ->
             9
+
+
+sortByWaitingTime : Study -> Int
+sortByWaitingTime study =
+    case study.apptTime of
+        Just time ->
+            Time.posixToMillis time
+
+        Nothing ->
+            0
 
 
 type Direction
