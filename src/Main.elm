@@ -92,10 +92,12 @@ locationToUrgency : String -> TriageCategory
 locationToUrgency location =
     let
         urgentLocations =
-            -- todo: change to regex matching
-            [ "ED", "CEC", "MAS", "A3SPCU", "B3SARA", "ICUH" ]
+            [ "ED", "CEC", "MAS", "PCU", "SARA", "ICU" ]
+
+        testLocationUrgency urgentLocation =
+            String.contains urgentLocation location
     in
-    if List.member location urgentLocations then
+    if List.any testLocationUrgency urgentLocations then
         1
 
     else
@@ -189,20 +191,17 @@ filterByModality modality studies =
 
 sortByScore : List Study -> List Study
 sortByScore studies =
-    studies |> List.sortWith (by .triage ASC |> andThen patientTypeScore ASC |> andThen sortByWaitingTime ASC)
+    studies
+        |> List.sortWith
+            (by .triage ASC
+                |> andThen sortByLocation ASC
+                |> andThen sortByWaitingTime ASC
+            )
 
 
-patientTypeScore : Study -> Int
-patientTypeScore study =
-    case study.patientType of
-        "ED" ->
-            0
-
-        "INP" ->
-            1
-
-        _ ->
-            9
+sortByLocation : Study -> Int
+sortByLocation study =
+    locationToUrgency study.patientLoc
 
 
 sortByWaitingTime : Study -> Int
@@ -302,6 +301,31 @@ view model =
 
                 Nothing ->
                     Element.none
+
+        viewModalityButton modality label =
+            let
+                selected =
+                    model.modality == modality
+
+                selectedStyle =
+                    [ Background.color (rgb255 255 255 255)
+                    , Font.color (rgb255 0 0 0)
+                    ]
+            in
+            Input.button
+                ([ Border.width 1
+                 , Border.rounded 5
+                 , Border.glow (rgb255 255 255 255) 0.5
+                 , padding 5
+                 ]
+                    ++ (if selected then
+                            selectedStyle
+
+                        else
+                            []
+                       )
+                )
+                { onPress = Just <| FilterModality modality, label = text label }
     in
     Element.layout
         [ Background.color <| rgb255 12 20 31
@@ -332,34 +356,10 @@ view model =
                 ]
                 (text (dateFormatter nz_zone model.time))
             , row [ padding 30, spacing 20, centerX ]
-                [ Input.button
-                    [ Border.width 1
-                    , Border.rounded 5
-                    , Border.glow (rgb255 255 255 255) 0.5
-                    , padding 5
-                    ]
-                    { onPress = Just <| FilterModality "ALL", label = text "All" }
-                , Input.button
-                    [ Border.width 1
-                    , Border.rounded 5
-                    , Border.glow (rgb255 255 255 255) 0.5
-                    , padding 5
-                    ]
-                    { onPress = Just <| FilterModality "XR", label = text "XR" }
-                , Input.button
-                    [ Border.width 1
-                    , Border.rounded 5
-                    , Border.glow (rgb255 255 255 255) 0.5
-                    , padding 5
-                    ]
-                    { onPress = Just <| FilterModality "CT", label = text "CT" }
-                , Input.button
-                    [ Border.width 1
-                    , Border.rounded 5
-                    , Border.glow (rgb255 255 255 255) 0.5
-                    , padding 5
-                    ]
-                    { onPress = Just <| FilterModality "MR", label = text "MR" }
+                [ viewModalityButton "ALL" "All"
+                , viewModalityButton "XR" "XR"
+                , viewModalityButton "CT" "CT"
+                , viewModalityButton "MR" "MR"
                 ]
             , el
                 [ padding 5
