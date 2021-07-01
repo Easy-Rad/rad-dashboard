@@ -4,26 +4,31 @@ import Browser
 import Date exposing (Date)
 import DateFormat
 import DateFormat.Relative
-import Element exposing (Element, alignLeft, alignRight, alignTop, centerX, centerY, column, el, fill, height, maximum, minimum, padding, paddingXY, rgb255, rgba255, row, scrollbarX, scrollbarY, scrollbars, shrink, spacing, text, width)
+import Element exposing (Element, alignBottom, alignLeft, alignRight, alignTop, centerX, centerY, column, el, fill, fillPortion, height, maximum, minimum, padding, paddingXY, rgb255, rgba255, row, scrollbarX, scrollbarY, scrollbars, shrink, spacing, text, width)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
-import Element.Keyed
-import Element.Lazy exposing (lazy)
 import Html exposing (Attribute, Html)
+import Html.Parser as Parser
+import Html.Parser.Util
 import Http
 import Iso8601
 import Task
 import Time
 import TimeZone
-import Xml.Decode as Decode exposing (Decoder, int, list, maybe, oneOf, path, requiredPath, run, single, string, succeed)
+import Xml.Decode as Decode exposing (Decoder, int, list, maybe, oneOf, optionalPath, path, requiredPath, run, single, string, succeed)
+import XmlParser as Xml
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( Model []
+        -- Modalities
         "ALL"
+        -- showNotes
+        Nothing
         -- 2021/05/25 12:00
         (Time.millisToPosix 1621942200000)
     , Cmd.batch
@@ -54,6 +59,7 @@ nz_zone =
 type alias Model =
     { studies : List Study
     , modality : String
+    , showNotes : Maybe ShowNotesTypes
     , time : Time.Posix
 
     -- refresh countdown : Int
@@ -73,6 +79,8 @@ type alias Study =
     , patientType : String -- todo: prob not v useful
     , patientLoc : String
     , triageStatus : String
+    , generalNotes : String
+    , radNotes : String
     }
 
 
@@ -99,14 +107,23 @@ locationToUrgency location =
 
 
 type Msg
-    = GotData (Result Http.Error String)
+    = Tick Time.Posix
+    | GotData (Result Http.Error String)
     | FilterModality String
-    | Tick Time.Posix
+    | ShowNotes (Maybe ShowNotesTypes)
+
+
+type ShowNotesTypes
+    = ShowGeneralNotes String
+    | ShowRadNotes String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        Tick newTime ->
+            ( { model | time = newTime }, Cmd.none )
+
         GotData (Ok rawXmlString) ->
             case run xmlDecoder rawXmlString of
                 Ok referrals ->
@@ -121,8 +138,22 @@ update msg model =
         FilterModality modality ->
             ( { model | modality = modality }, Cmd.none )
 
-        Tick newTime ->
-            ( { model | time = newTime }, Cmd.none )
+        ShowNotes notesTypes ->
+            case notesTypes of
+                Just (ShowGeneralNotes content) ->
+                    ( { model | showNotes = Just (ShowGeneralNotes content) }
+                    , Cmd.none
+                    )
+
+                Just (ShowRadNotes content) ->
+                    ( { model | showNotes = Just (ShowRadNotes content) }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( { model | showNotes = Nothing }
+                    , Cmd.none
+                    )
 
         _ ->
             ( -- Debug.log "Unmatched message type"
@@ -213,6 +244,54 @@ view model =
     let
         studies =
             model.studies |> filterByModality model.modality |> sortByScore
+
+        parseNotes content =
+            case Parser.run content of
+                Ok nodes ->
+                    el
+                        [ alignBottom
+                        , centerX
+                        , padding 20
+                        , width fill
+                        , height (shrink |> maximum 500)
+                        , Element.scrollbars
+                        , Background.color (rgb255 255 255 255)
+                        , Font.size 16
+                        , Font.color (rgb255 0 0 0)
+                        , Element.inFront
+                            (el
+                                [ alignTop
+                                , alignRight
+                                , padding 1
+                                , Events.onMouseDown (ShowNotes Nothing)
+                                , Element.pointer
+                                , width (Element.px 20)
+                                , height (Element.px 20)
+                                , Font.center
+                                ]
+                                (text "x")
+                            )
+                        ]
+                    <|
+                        Element.html
+                            (Html.node "div"
+                                []
+                                (Html.Parser.Util.toVirtualDom nodes)
+                            )
+
+                Err error ->
+                    el [] (text "Malformed notes, please see COMRAD.")
+
+        viewNotesOverlay =
+            case model.showNotes of
+                Just (ShowGeneralNotes content) ->
+                    parseNotes content
+
+                Just (ShowRadNotes content) ->
+                    parseNotes content
+
+                Nothing ->
+                    Element.none
     in
     Element.layout
         [ Background.color <| rgb255 12 20 31
@@ -220,6 +299,8 @@ view model =
         , Font.family [ Font.typeface "Roboto", Font.sansSerif ]
         , width fill
         , padding 10
+        , Element.inFront viewNotesOverlay
+        , Events.onMouseUp (ShowNotes Nothing)
         ]
         (column
             [ width fill
@@ -235,7 +316,11 @@ view model =
                 [ text "Radiology Dashboard"
                 , el [ Font.family [ Font.sansSerif ], Font.size 12, alignTop, paddingXY 3 0 ] (text "alpha")
                 ]
-            , el [ Font.center, centerX ] (text (dateFormatter nz_zone model.time))
+            , el
+                [ Font.center
+                , centerX
+                ]
+                (text (dateFormatter nz_zone model.time))
             , row [ padding 30, spacing 20, centerX ]
                 [ Input.button [] { onPress = Just <| FilterModality "ALL", label = text "All" }
                 , Input.button [] { onPress = Just <| FilterModality "XR", label = text "XR" }
@@ -314,7 +399,12 @@ viewTable time studies =
               , width = fill
               , view =
                     \study ->
-                        el [ rowPadding, Font.center ] <| text study.patientName
+                        el
+                            [ rowPadding
+                            , Font.center
+                            ]
+                        <|
+                            text study.patientName
               }
             , { header = el [ headerBorder, headerPadding, Font.center ] <| text "NHI"
               , width = fill |> maximum 100 |> minimum 50
@@ -340,7 +430,16 @@ viewTable time studies =
               , width = fill |> maximum 1000 |> minimum 50
               , view =
                     \study ->
-                        el [ rowPadding, Font.alignLeft, Font.extraBold, Element.clipX ] <| text study.description
+                        row [ rowPadding, spacing 5 ]
+                            [ Element.paragraph
+                                [ Font.alignLeft
+                                , Font.extraBold
+                                , Font.size 16
+                                , width (fillPortion 18)
+                                ]
+                                [ text study.description ]
+                            , viewNotesIcons study.generalNotes study.radNotes
+                            ]
               }
             , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Referral Time"
               , width = fill
@@ -420,10 +519,75 @@ viewTable time studies =
                                     text (DateFormat.Relative.relativeTime time due)
 
                             Nothing ->
-                                el [ rowPadding, Font.center ] <| text "-"
+                                el
+                                    [ rowPadding
+                                    , Font.center
+                                    ]
+                                <|
+                                    text "-"
               }
             ]
         }
+
+
+viewNotesIcons : String -> String -> Element Msg
+viewNotesIcons generalNotes radNotes =
+    let
+        viewGeneralNotes : String -> Element Msg
+        viewGeneralNotes content =
+            case content of
+                "" ->
+                    Element.none
+
+                _ ->
+                    el
+                        [ Background.color (rgb255 0 0 255)
+                        , Font.center
+                        , Font.bold
+                        , Font.size 16
+                        , Font.family [ Font.serif ]
+                        , Border.rounded 10
+                        , alignRight
+                        , padding 2
+                        , width (Element.px 20)
+                        , height (Element.px 20)
+                        , Element.pointer
+                        , Events.onClick (ShowNotes <| Just (ShowGeneralNotes content))
+                        ]
+                        (text "i")
+
+        viewRadNotes : String -> Element Msg
+        viewRadNotes content =
+            case content of
+                "" ->
+                    Element.none
+
+                _ ->
+                    el
+                        [ Background.color (rgb255 255 255 0)
+                        , Font.center
+                        , Font.bold
+                        , Font.size 16
+                        , Font.color (rgb255 0 0 0)
+                        , Border.rounded 10
+                        , alignRight
+                        , padding 2
+                        , width (Element.px 20)
+                        , height (Element.px 20)
+                        , Element.pointer
+                        , Events.onClick (ShowNotes <| Just (ShowRadNotes content))
+                        ]
+                        (text "R")
+    in
+    case ( generalNotes, radNotes ) of
+        ( "", "" ) ->
+            Element.none
+
+        _ ->
+            row [ width (fillPortion 1), spacing 10 ]
+                [ viewGeneralNotes generalNotes
+                , viewRadNotes radNotes
+                ]
 
 
 dueInTime : Study -> Maybe Time.Posix
@@ -564,6 +728,16 @@ timeDecoder =
             )
 
 
+embedNodeDecoder : Decoder String
+embedNodeDecoder =
+    let
+        nodeToString node =
+            Xml.Xml [] Nothing node
+                |> Xml.format
+    in
+    Decode.map nodeToString Decode.node
+
+
 studyDecoder : Decoder Study
 studyDecoder =
     succeed Study
@@ -579,3 +753,5 @@ studyDecoder =
         |> requiredPath [ "pattype" ] (single string)
         |> requiredPath [ "patloc" ] (single string)
         |> requiredPath [ "triagestatus" ] (single string)
+        |> optionalPath [ "notes", "html", "body" ] (single embedNodeDecoder) ""
+        |> optionalPath [ "radnotes", "html", "body" ] (single embedNodeDecoder) ""
