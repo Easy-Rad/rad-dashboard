@@ -18,7 +18,7 @@ import Iso8601
 import Task
 import Time
 import TimeZone
-import Xml.Decode as Decode exposing (Decoder, int, list, maybe, oneOf, optionalPath, path, requiredPath, run, single, string, succeed)
+import Xml.Decode as XD exposing (Decoder, int, list, maybe, oneOf, optionalPath, path, requiredPath, run, single, string, succeed)
 import XmlParser as Xml
 
 
@@ -30,7 +30,9 @@ init _ =
         -- showNotes
         Nothing
         -- 2021/05/25 12:00
-        (Time.millisToPosix 1621942200000)
+        (Time.millisToPosix 1621943820000)
+        -- Timestamp is only available on data arrival
+        Nothing
     , Cmd.batch
         [ getXml
 
@@ -61,6 +63,7 @@ type alias Model =
     , modality : String
     , showNotes : Maybe ShowNotesTypes
     , time : Time.Posix
+    , dataTimestamp : Maybe Time.Posix
 
     -- refresh countdown : Int
     }
@@ -76,7 +79,7 @@ type alias Study =
     , orderDate : String
     , dateReceived : String
     , apptTime : Maybe Time.Posix
-    , patientType : String -- todo: prob not v useful
+    , patientType : String
     , patientLoc : String
     , triageStatus : String
     , generalNotes : String
@@ -86,6 +89,12 @@ type alias Study =
 
 type alias TriageCategory =
     Int
+
+
+type alias XmlResult =
+    { timeStamp : Time.Posix
+    , studies : List Study
+    }
 
 
 locationToUrgency : String -> TriageCategory
@@ -110,7 +119,7 @@ locationToUrgency location =
 
 type Msg
     = Tick Time.Posix
-    | GotData (Result Http.Error String)
+    | GotData (Result Http.Error XmlResult)
     | FilterModality String
     | ShowNotes (Maybe ShowNotesTypes)
 
@@ -126,16 +135,13 @@ update msg model =
         Tick newTime ->
             ( { model | time = newTime }, Cmd.none )
 
-        GotData (Ok rawXmlString) ->
-            case run xmlDecoder rawXmlString of
-                Ok referrals ->
-                    ( { model | studies = referrals }, Cmd.none )
-
-                Err error ->
-                    ( -- Debug.log ("Error" ++ error)
-                      { model | studies = [], modality = "all" }
-                    , Cmd.none
-                    )
+        GotData (Ok xmlResult) ->
+            ( { model
+                | studies = xmlResult.studies
+                , dataTimestamp = Just xmlResult.timeStamp
+              }
+            , Cmd.none
+            )
 
         FilterModality modality ->
             ( { model | modality = modality }, Cmd.none )
@@ -668,13 +674,41 @@ getXml : Cmd Msg
 getXml =
     Http.get
         { url = "anonymised_summary.xml"
-        , expect = Http.expectString GotData
+        , expect = expectXml GotData xmlDecoder
         }
 
 
-xmlDecoder : Decoder (List Study)
+expectXml : (Result Http.Error a -> msg) -> XD.Decoder a -> Http.Expect msg
+expectXml toMsg decoder =
+    Http.expectStringResponse toMsg <|
+        \response ->
+            case response of
+                Http.BadUrl_ url ->
+                    Err (Http.BadUrl url)
+
+                Http.Timeout_ ->
+                    Err Http.Timeout
+
+                Http.NetworkError_ ->
+                    Err Http.NetworkError
+
+                Http.BadStatus_ metadata body ->
+                    Err (Http.BadStatus metadata.statusCode)
+
+                Http.GoodStatus_ metadata body ->
+                    case XD.decodeString decoder body of
+                        Ok value ->
+                            Ok value
+
+                        Err err ->
+                            Err (Http.BadBody err)
+
+
+xmlDecoder : Decoder XmlResult
 xmlDecoder =
-    path [ "ereferral", "study" ] (list studyDecoder)
+    succeed XmlResult
+        |> requiredPath [ "extractdatetime" ] (single timeDecoder)
+        |> requiredPath [ "ereferral", "study" ] (list studyDecoder)
 
 
 triageCategoryToString : TriageCategory -> String
@@ -706,6 +740,25 @@ triageCategoryToString category =
 
         _ ->
             "-"
+
+
+studyDecoder : Decoder Study
+studyDecoder =
+    succeed Study
+        |> requiredPath [ "site" ] (single string)
+        |> requiredPath [ "examtype" ] (single string)
+        |> requiredPath [ "description" ] (single string)
+        |> requiredPath [ "NHI" ] (single string)
+        |> requiredPath [ "patientname" ] (single string)
+        |> requiredPath [ "status" ] (single triageCategoryDecoder)
+        |> requiredPath [ "orderdate" ] (single string)
+        |> requiredPath [ "datereceived" ] (single string)
+        |> requiredPath [ "appttime" ] (single <| maybe timeDecoder)
+        |> requiredPath [ "pattype" ] (single string)
+        |> requiredPath [ "patloc" ] (single string)
+        |> requiredPath [ "triagestatus" ] (single string)
+        |> optionalPath [ "notes", "html", "body" ] (single embedNodeDecoder) ""
+        |> optionalPath [ "radnotes", "html", "body" ] (single embedNodeDecoder) ""
 
 
 triageCategoryDecoder : Decoder TriageCategory
@@ -741,13 +794,13 @@ triageCategoryDecoder =
                     -- Debug.log ("Unknown triage category (status): " ++ triage)
                     99999
     in
-    Decode.map parseTriageCategory string
+    XD.map parseTriageCategory string
 
 
 timeDecoder : Decoder Time.Posix
 timeDecoder =
-    Decode.string
-        |> Decode.andThen
+    XD.string
+        |> XD.andThen
             (\str ->
                 let
                     iso =
@@ -755,10 +808,10 @@ timeDecoder =
                 in
                 case Iso8601.toTime iso of
                     Err _ ->
-                        Decode.fail "Time decoding failed"
+                        XD.fail "Time decoding failed"
 
                     Ok time ->
-                        Decode.succeed time
+                        XD.succeed time
             )
 
 
@@ -769,23 +822,28 @@ embedNodeDecoder =
             Xml.Xml [] Nothing node
                 |> Xml.format
     in
-    Decode.map nodeToString Decode.node
+    XD.map nodeToString XD.node
 
 
-studyDecoder : Decoder Study
-studyDecoder =
-    succeed Study
-        |> requiredPath [ "site" ] (single string)
-        |> requiredPath [ "examtype" ] (single string)
-        |> requiredPath [ "description" ] (single string)
-        |> requiredPath [ "NHI" ] (single string)
-        |> requiredPath [ "patientname" ] (single string)
-        |> requiredPath [ "status" ] (single triageCategoryDecoder)
-        |> requiredPath [ "orderdate" ] (single string)
-        |> requiredPath [ "datereceived" ] (single string)
-        |> requiredPath [ "appttime" ] (single <| maybe timeDecoder)
-        |> requiredPath [ "pattype" ] (single string)
-        |> requiredPath [ "patloc" ] (single string)
-        |> requiredPath [ "triagestatus" ] (single string)
-        |> optionalPath [ "notes", "html", "body" ] (single embedNodeDecoder) ""
-        |> optionalPath [ "radnotes", "html", "body" ] (single embedNodeDecoder) ""
+
+-- Styles
+
+
+headerBorder : Element.Attribute Msg
+headerBorder =
+    Border.widthEach
+        { bottom = 2
+        , left = 0
+        , right = 0
+        , top = 0
+        }
+
+
+headerPadding : Element.Attribute Msg
+headerPadding =
+    Element.paddingEach { top = 10, right = 5, left = 5, bottom = 15 }
+
+
+rowPadding : Element.Attribute Msg
+rowPadding =
+    Element.paddingEach { top = 15, right = 5, left = 5, bottom = 15 }
