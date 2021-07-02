@@ -258,31 +258,6 @@ view model =
     let
         studies =
             model.studies |> filterByModality model.modality |> sortByScore
-
-        viewModalityButton modality label =
-            let
-                selected =
-                    model.modality == modality
-
-                selectedStyle =
-                    [ Background.color (rgb255 255 255 255)
-                    , Font.color (rgb255 0 0 0)
-                    ]
-            in
-            Input.button
-                ([ Border.width 1
-                 , Border.rounded 5
-                 , Border.glow (rgb255 255 255 255) 0.5
-                 , padding 5
-                 ]
-                    ++ (if selected then
-                            selectedStyle
-
-                        else
-                            []
-                       )
-                )
-                { onPress = Just <| FilterModality modality, label = text label }
     in
     Element.layout
         [ Background.color <| rgb255 12 20 31
@@ -297,6 +272,7 @@ view model =
             , centerX
             , width fill
             , height fill
+            , Element.scrollbars
             ]
             [ row
                 [ padding 10
@@ -315,10 +291,10 @@ view model =
                 , viewTimeInfo model
                 ]
             , row [ padding 30, spacing 20, centerX ]
-                [ viewModalityButton "ALL" "All"
-                , viewModalityButton "XR" "XR"
-                , viewModalityButton "CT" "CT"
-                , viewModalityButton "MR" "MR"
+                [ viewModalityButton model.modality "ALL" "All"
+                , viewModalityButton model.modality "XR" "XR"
+                , viewModalityButton model.modality "CT" "CT"
+                , viewModalityButton model.modality "MR" "MR"
                 ]
             , viewTable model.time studies
             , column [ centerX, padding 10, Font.size 12, spacing 5 ]
@@ -327,6 +303,33 @@ view model =
                 ]
             ]
         )
+
+
+viewModalityButton : String -> String -> String -> Element Msg
+viewModalityButton current modality label =
+    let
+        selected =
+            current == modality
+
+        selectedStyle =
+            [ Background.color (rgb255 255 255 255)
+            , Font.color (rgb255 0 0 0)
+            ]
+    in
+    Input.button
+        ([ Border.width 1
+         , Border.rounded 5
+         , Border.glow (rgb255 255 255 255) 0.5
+         , padding 5
+         ]
+            ++ (if selected then
+                    selectedStyle
+
+                else
+                    []
+               )
+        )
+        { onPress = Just <| FilterModality modality, label = text label }
 
 
 viewTimeInfo : Model -> Element Msg
@@ -424,163 +427,165 @@ viewTable time studies =
             viewEmptyTable
 
         _ ->
-            Element.table
-                [ padding 5
-                , width fill
-                , centerX
-                , Border.color <| rgb255 111 195 223
-                , Border.width 2
-                , Border.rounded 5
-                ]
-                { data = studies
-                , columns =
-                    [ { header = el [ headerBorder, headerPadding, Font.center ] <| text "Modality"
-                      , width = fill
-                      , view =
-                            \study ->
-                                el
-                                    [ rowPadding
-                                    , Font.center
-                                    , Font.family [ Font.monospace ]
-                                    , Font.size 16
-                                    ]
-                                <|
-                                    text study.examType
-                      }
-                    , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Name"
-                      , width = fillPortion 2
-                      , view =
-                            \study ->
-                                el
-                                    [ rowPadding
-                                    , Font.center
-                                    ]
-                                <|
-                                    text study.patientName
-                      }
-                    , { header = el [ headerBorder, headerPadding, Font.center ] <| text "NHI"
-                      , width = fill
-                      , view =
-                            \study ->
-                                el
-                                    [ rowPadding
-                                    , Font.center
-                                    , Font.family [ Font.monospace ]
-                                    , Font.size 16
-                                    ]
-                                <|
-                                    el
-                                        [ Background.color (rgb255 223 116 12)
-                                        , Border.rounded 5
-                                        , Font.color (rgb255 0 0 0)
-                                        , centerX
-                                        , padding 3
-                                        ]
-                                        (text study.nhi)
-                      }
-                    , { header = el [ headerBorder, headerPadding, Font.alignLeft ] <| text "Examination"
-                      , width = fillPortion 4
-                      , view =
-                            \study ->
-                                row [ rowPadding, spacing 5, Font.size 16 ]
-                                    [ Element.paragraph
-                                        [ Font.alignLeft
-                                        , Font.extraBold
-                                        , width (fillPortion 18)
-                                        ]
-                                        [ text study.description ]
-                                    , viewNotesIcons study.generalNotes study.radNotes
-                                    ]
-                      }
-                    , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Referral Time"
-                      , width = fillPortion 2
-                      , view =
-                            \study ->
-                                case study.apptTime of
-                                    Just referralTime ->
-                                        el
-                                            [ rowPadding
-                                            , Font.center
-                                            , Font.family [ Font.monospace ]
-                                            , Font.extraLight
-                                            , Font.size 16
-                                            ]
-                                        <|
-                                            text (dateFormatter nz_zone referralTime)
+            el [ width shrink ] <|
+                Element.table
+                    [ padding 5
+                    , centerX
 
-                                    Nothing ->
-                                        el [ rowPadding, Font.center, Font.size 16 ] <| text ""
-                      }
-                    , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Triage Category"
-                      , width = fill
-                      , view =
-                            \study ->
-                                el
-                                    [ rowPadding
-                                    , Font.color <| rgb255 223 116 12
-                                    , Font.center
-                                    , Font.family [ Font.monospace ]
-                                    , Font.size 16
-                                    ]
-                                <|
-                                    text <|
-                                        triageCategoryToString study.triage
-                      }
-                    , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Location"
-                      , width = fill
-                      , view =
-                            \study ->
-                                el
-                                    [ rowPadding
-                                    , Font.center
-                                    , Font.family [ Font.monospace ]
-                                    , Font.size 16
-                                    ]
-                                <|
-                                    text study.patientLoc
-                      }
-                    , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Due in"
-                      , width = fill
-                      , view =
-                            \study ->
-                                case dueInTime study of
-                                    Just due ->
-                                        let
-                                            diff =
-                                                (Time.posixToMillis due - Time.posixToMillis time) // (1000 * 60 * 60)
-
-                                            alpha =
-                                                if diff < 0 then
-                                                    1.0
-
-                                                else if diff <= 4 then
-                                                    1 - (toFloat diff / 4)
-
-                                                else
-                                                    0.0
-                                        in
-                                        el
-                                            [ rowPadding
-                                            , height fill
-                                            , Font.center
-                                            , Font.size 18
-
-                                            -- , height fill
-                                            , Background.color (rgba255 255 0 0 alpha)
-                                            ]
-                                        <|
-                                            text (DateFormat.Relative.relativeTime time due)
-
-                                    Nothing ->
-                                        el
-                                            [ rowPadding
-                                            , Font.center
-                                            ]
-                                        <|
-                                            text "-"
-                      }
+                    -- , width shrink
+                    , Border.color <| rgb255 111 195 223
+                    , Border.width 2
+                    , Border.rounded 5
                     ]
-                }
+                    { data = studies
+                    , columns =
+                        [ { header = el [ headerBorder, headerPadding, Font.center ] <| text "Modality"
+                          , width = fill
+                          , view =
+                                \study ->
+                                    el
+                                        [ rowPadding
+                                        , Font.center
+                                        , Font.family [ Font.monospace ]
+                                        , Font.size 16
+                                        ]
+                                    <|
+                                        text study.examType
+                          }
+                        , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Name"
+                          , width = fillPortion 2
+                          , view =
+                                \study ->
+                                    el
+                                        [ rowPadding
+                                        , Font.center
+                                        ]
+                                    <|
+                                        text study.patientName
+                          }
+                        , { header = el [ headerBorder, headerPadding, Font.center ] <| text "NHI"
+                          , width = fill
+                          , view =
+                                \study ->
+                                    el
+                                        [ rowPadding
+                                        , Font.center
+                                        , Font.family [ Font.monospace ]
+                                        , Font.size 16
+                                        ]
+                                    <|
+                                        el
+                                            [ Background.color (rgb255 223 116 12)
+                                            , Border.rounded 5
+                                            , Font.color (rgb255 0 0 0)
+                                            , centerX
+                                            , padding 3
+                                            ]
+                                            (text study.nhi)
+                          }
+                        , { header = el [ headerBorder, headerPadding, Font.alignLeft ] <| text "Examination"
+                          , width = fillPortion 4
+                          , view =
+                                \study ->
+                                    row [ rowPadding, spacing 5, Font.size 16 ]
+                                        [ Element.paragraph
+                                            [ Font.alignLeft
+                                            , Font.extraBold
+                                            , width (fillPortion 18)
+                                            ]
+                                            [ text study.description ]
+                                        , viewNotesIcons study.generalNotes study.radNotes
+                                        ]
+                          }
+                        , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Referral Time"
+                          , width = fillPortion 2
+                          , view =
+                                \study ->
+                                    case study.apptTime of
+                                        Just referralTime ->
+                                            el
+                                                [ rowPadding
+                                                , Font.center
+                                                , Font.family [ Font.monospace ]
+                                                , Font.extraLight
+                                                , Font.size 16
+                                                ]
+                                            <|
+                                                text (dateFormatter nz_zone referralTime)
+
+                                        Nothing ->
+                                            el [ rowPadding, Font.center, Font.size 16 ] <| text ""
+                          }
+                        , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Triage Category"
+                          , width = fill
+                          , view =
+                                \study ->
+                                    el
+                                        [ rowPadding
+                                        , Font.color <| rgb255 223 116 12
+                                        , Font.center
+                                        , Font.family [ Font.monospace ]
+                                        , Font.size 16
+                                        ]
+                                    <|
+                                        text <|
+                                            triageCategoryToString study.triage
+                          }
+                        , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Location"
+                          , width = fill
+                          , view =
+                                \study ->
+                                    el
+                                        [ rowPadding
+                                        , Font.center
+                                        , Font.family [ Font.monospace ]
+                                        , Font.size 16
+                                        ]
+                                    <|
+                                        text study.patientLoc
+                          }
+                        , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Due in"
+                          , width = fill
+                          , view =
+                                \study ->
+                                    case dueInTime study of
+                                        Just due ->
+                                            let
+                                                diff =
+                                                    (Time.posixToMillis due - Time.posixToMillis time) // (1000 * 60 * 60)
+
+                                                alpha =
+                                                    if diff < 0 then
+                                                        1.0
+
+                                                    else if diff <= 4 then
+                                                        1 - (toFloat diff / 4)
+
+                                                    else
+                                                        0.0
+                                            in
+                                            el
+                                                [ rowPadding
+                                                , height fill
+                                                , Font.center
+                                                , Font.size 18
+
+                                                -- , height fill
+                                                , Background.color (rgba255 255 0 0 alpha)
+                                                ]
+                                            <|
+                                                text (DateFormat.Relative.relativeTime time due)
+
+                                        Nothing ->
+                                            el
+                                                [ rowPadding
+                                                , Font.center
+                                                ]
+                                            <|
+                                                text "-"
+                          }
+                        ]
+                    }
 
 
 viewEmptyTable : Element Msg
