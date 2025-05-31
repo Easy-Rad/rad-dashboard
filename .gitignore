@@ -15,3 +15,6 @@ node_modules
 
 # Venv
 virtualenv/
+anonymised_summary.xml
+src/migrate.py
+elm.js
