@@ -645,35 +645,18 @@ fetchData timestamp modality =
 triageCategoryToString : TriageCategory -> String
 triageCategoryToString category =
     case category of
-        0 ->
-            "STAT"
-
-        1 ->
-            "1 hour"
-
-        4 ->
-            "4 hours"
-
-        24 ->
-            "24 hours"
-
-        48 ->
-            "2 days"
-
-        336 ->
-            "2 weeks"
-        672 ->
-            "4 weeks"
-        1008 ->
-            "6 weeks"
-        1009 ->
-            "Planned"
-
-        9999 ->
-            "Not triaged"
-
-        _ ->
-            "-"
+        0 -> "STAT"
+        1 -> "1 hour"
+        4 -> "4 hours"
+        24 -> "24 hours"
+        48 -> "2 days"
+        336 -> "2 weeks"
+        672 -> "4 weeks"
+        1008 -> "6 weeks"
+        1009 -> "DAROT"
+        1010 -> "Planned"
+        9999 -> "Not triaged"
+        _ -> "-"
 
 
 studyDecoder : Decoder Study
@@ -696,36 +679,17 @@ triageCategoryDecoder =
     let
         parseTriageCategory triage =
             case triage of
-                "STAT" ->
-                    0
-
-                "1 hour" ->
-                    1
-
-                "4 hours" ->
-                    4
-
-                "24 hours" ->
-                    24
-
-                "2 days" ->
-                    48
-
-                "2 weeks" ->
-                    336
-
-                "4 weeks" ->
-                    672
-
-                "6 weeks" ->
-                    1008
-
-                "Planned" ->
-                    1009
-
-                _ ->
-                    -- Debug.log ("Unknown triage category (status): " ++ triage)
-                    99999
+                "STAT" -> 0
+                "1 hour" -> 1
+                "4 hours" -> 4
+                "24 hours" -> 24
+                "2 days" -> 48
+                "2 weeks" -> 336
+                "4 weeks" -> 672
+                "6 weeks" -> 1008
+                "DAROT" -> 1009
+                "Planned" -> 1010
+                _ -> 99999
     in
     map parseTriageCategory string
 
