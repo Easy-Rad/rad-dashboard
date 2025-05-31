@@ -17,4 +17,3 @@ node_modules
 virtualenv/
 anonymised_summary.xml
 src/migrate.py
-elm.js
