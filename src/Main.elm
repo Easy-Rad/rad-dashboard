@@ -631,7 +631,7 @@ dueInTime study =
 fetchData : Time.Posix -> Modality -> Cmd Msg
 fetchData timestamp modality =
     Http.get
-        { url = "/api/dashboard/" ++ case modality of 
+        { url = "https://api.easyrad.duckdns.org/dashboard/" ++ case modality of 
                 XR -> "XR"
                 CT -> "CT"
                 MR -> "MR"
