@@ -1,30 +1,15 @@
 {
-  "name": "rad-dashboard",
-  "version": "0.1.0",
-  "description": "This project is bootstrapped with [Create Elm App](https://github.com/halfzebra/create-elm-app).",
-  "main": "index.js",
-  "directories": {
-    "test": "tests"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "create-elm-app": "^5.22.0",
     "elm": "^0.19.1-6",
-    "elm-live": "^4.0.0-rc.1"
+    "elm-format": "^0.8.8",
+    "elm-live": "^4.0.2",
+    "elm-test": "^0.19.1-revision15",
+    "uglify-js": "^3.19.3"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "elm make src/Main.elm --optimize --output=build/elm.js",
-    "postbuild": "uglifyjs build/elm.js --compress pure_funcs=[F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9],pure_getters,keep_fargs=false,unsafe_comps,unsafe | uglifyjs --mangle --output public/elm.min.js",
-    "start": "elm-live src/Main.elm"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Tubo/rad-dashboard.git"
-  },
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/Tubo/rad-dashboard/issues"
-  },
-  "homepage": "https://github.com/Tubo/rad-dashboard#readme"
+    "prebuild": "elm-format src/ --yes",
+    "build": "elm make src/Main.elm --optimize --output=build/elm.js && uglifyjs build/elm.js --compress 'pure_funcs=[F2,F3,F4,F5,F6,F7,F8,F9,A2,A3,A4,A5,A6,A7,A8,A9],pure_getters,keep_fargs=false,unsafe_comps,unsafe' | uglifyjs --mangle -o public/elm.js",
+    "start": "elm-live src/Main.elm -u -h 127.0.0.1 -d public/ --open -- --output=public/elm.js"
+  }
 }

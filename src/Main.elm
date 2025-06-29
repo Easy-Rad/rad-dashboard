@@ -1,37 +1,29 @@
 module Main exposing (Msg(..), fetchData, init, main, update, view, viewTable)
 
-import Browser
+import Browser exposing (Document)
 import DateFormat
 import DateFormat.Relative
-import Element exposing (Element, alignBottom, alignRight, alignTop, centerX, column, el, fill, fillPortion, height, maximum, padding, paddingXY, rgb255, rgba255, row, shrink, spacing, text, width)
-import Element.Background as Background
-import Element.Border as Border
-import Element.Events as Events
-import Element.Font as Font
-import Element.Input as Input
-import Html exposing (Html)
-import Http exposing (Error(..))
+import Html exposing (Html, a, button, div, h1, img, input, label, p, table, tbody, td, text, th, thead, tr)
+import Html.Attributes exposing (checked, class, classList, for, id, scope, src, type_)
+import Html.Events exposing (onCheck, onClick)
+import Http exposing (Error(..), expectJson)
+import Json.Decode exposing (Decoder, int, list, map, string, succeed)
+import Json.Decode.Pipeline exposing (optional, required)
+import Set exposing (Set)
 import Task
 import Time
 import TimeZone
-import Http exposing (expectJson)
-import Json.Decode exposing (Decoder, succeed, string, map, list, int)
-import Json.Decode.Pipeline exposing (optional, required)
-import Browser
-import Element exposing (textColumn)
-import Browser exposing (Document)
-import Html.Attributes exposing (title)
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
     ( Model (Ok [])
         CT
-        -- showNotes
+        False
+        Set.empty
+        Set.empty
         Nothing
-        Nothing
-    , 
-    Task.perform FetchData Time.now 
+    , Task.perform FetchData Time.now
     )
 
 
@@ -57,45 +49,56 @@ nz_zone =
 type alias Model =
     { result : Result Http.Error (List Study)
     , modality : Modality
-    , showNotes : Maybe ShowNotesTypes
+    , showHiddenReferrals : Bool
+    , showRadNotes : Set Int
+    , hiddenReferrals : Set Int
     , dataTimestamp : Maybe Time.Posix
     }
 
 
 type alias Study =
-    { site : String
+    { id : Int
+    , site : String
     , description : String
     , nhi : String
     , pa_firstname : String
     , pa_surname : String
     , pa_type : String
     , urgency : TriageCategory
-    , received: Time.Posix
+    , received : Time.Posix
     , location : Maybe String
     , generalNotes : List String
     , radNotes : List String
     }
 
-type Modality =
-    CT | DSA | MR | NM | US| XR
+
+type Modality
+    = CT
+    | DSA
+    | MR
+    | NM
+    | US
+    | XR
+
 
 type alias TriageCategory =
     Int
 
 
-locationToUrgency : Maybe String -> TriageCategory
-locationToUrgency location =
+locationToTriageCategory : Maybe String -> TriageCategory
+locationToTriageCategory location =
     let
         urgentLocations =
             [ "ED", "CEC", "MAS", "PCU", "SARA", "ICU" ]
-
     in
     case location of
         Just l ->
             if List.any (\u -> String.contains u l) urgentLocations then
                 1
+
             else
                 24
+
         Nothing ->
             24
 
@@ -108,12 +111,9 @@ type Msg
     = FetchData Time.Posix
     | GotResult Time.Posix (Result Http.Error (List Study))
     | ChangeModality Modality
-    | ShowNotes (Maybe ShowNotesTypes)
-
-
-type ShowNotesTypes
-    = ShowGeneralNotes (List String)
-    | ShowRadNotes (List String)
+    | ShowReferral Int Bool
+    | ShowRadNotes Int Bool
+    | ShowHiddenReferrals Bool
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -129,35 +129,56 @@ update msg model =
               }
             , Cmd.none
             )
-        
+
         ChangeModality modality ->
             ( { model | modality = modality }, Task.perform FetchData Time.now )
 
-        ShowNotes notesTypes ->
-            case notesTypes of
-                Just (ShowGeneralNotes content) ->
-                    ( { model | showNotes = Just (ShowGeneralNotes content) }
-                    , Cmd.none
-                    )
+        ShowReferral id show ->
+            ( { model
+                | hiddenReferrals =
+                    (if show then
+                        Set.remove
 
-                Just (ShowRadNotes content) ->
-                    ( { model | showNotes = Just (ShowRadNotes content) }
-                    , Cmd.none
+                     else
+                        Set.insert
                     )
+                        id
+                        model.hiddenReferrals
+              }
+            , Cmd.none
+            )
 
-                Nothing ->
-                    ( { model | showNotes = Nothing }
-                    , Cmd.none
+        ShowRadNotes id show ->
+            ( { model
+                | showRadNotes =
+                    (if show then
+                        Set.insert
+
+                     else
+                        Set.remove
                     )
+                        id
+                        model.showRadNotes
+              }
+            , Cmd.none
+            )
+
+        ShowHiddenReferrals show ->
+            ( { model | showHiddenReferrals = show }, Cmd.none )
+
+
 
 -- SUBSCRIPTIONS
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Time.every (60*1000) FetchData
+    Time.every (60 * 1000) FetchData
+
+
 
 -- VIEW
+
 
 sortByScore : List Study -> List Study
 sortByScore studies =
@@ -171,7 +192,7 @@ sortByScore studies =
 
 sortByLocation : Study -> Int
 sortByLocation study =
-    locationToUrgency study.location
+    locationToTriageCategory study.location
 
 
 sortByWaitingTime : Study -> Int
@@ -180,7 +201,8 @@ sortByWaitingTime study =
 
 
 type Direction
-    = ASC | DESC
+    = ASC
+    | DESC
 
 
 by : (a -> comparable) -> Direction -> (a -> a -> Order)
@@ -213,157 +235,109 @@ andThen toCmp direction primary a b =
 
 
 view : Model -> Document Msg
-view model = 
-    Element.layout
-        [ Background.color <| rgb255 12 20 31
-        , Font.color <| rgb255 230 255 255
-        , Font.family [ Font.typeface "Roboto", Font.sansSerif ]
-        , width fill
-        , Element.inFront (viewNotesOverlay model)
-        , Events.onMouseUp (ShowNotes Nothing)
-        ]
-        (column
-            [ padding 10
-            , centerX
-            , width fill
-            , height fill
-            , Element.scrollbars
-            ]
-            [ row
-                [ padding 10
-                , Font.size 30
-                , Font.family [ Font.typeface "Orbitron", Font.sansSerif ]
-                , width fill
-                ]
-                [ el
-                    [ centerX
-                    , Element.onRight
-                        (el [ Font.family [ Font.sansSerif ], Font.size 12, alignTop, paddingXY 3 0 ]
-                            (text "alpha")
-                        )
-                    ]
-                    (text "Radiology Dashboard")
-                , viewTimeInfo model
-                ]
-            , row [ padding 30, spacing 20, centerX ]
-                [ viewModalityButton model.modality XR
-                , viewModalityButton model.modality CT
-                , viewModalityButton model.modality MR
-                , viewModalityButton model.modality US
-                , viewModalityButton model.modality NM
-                , viewModalityButton model.modality DSA
-                ]
-            , case model.result of
+view model =
+    let
+        hiddenCount =
+            case model.result of
                 Ok studies ->
-                    studies |> sortByScore |> viewTable model.dataTimestamp
-                Err err ->
-                    viewError err
-            , column [ centerX, padding 10, Font.size 12, spacing 5 ]
-                [ el [ Font.center, centerX ] (text " Christchurch Hospital")
-                , el [ Font.center, centerX ] (text "Department of Radiology")
-                ]
-            ]
-        )
-        |> List.singleton |> Document "Radiology Dashboard"
+                    List.foldl
+                        (\study acc ->
+                            if Set.member study.id model.hiddenReferrals then
+                                acc + 1
 
+                            else
+                                acc
+                        )
+                        0
+                        studies
 
-viewModalityButton : Modality -> Modality -> Element Msg
-viewModalityButton current modality =
-    let
-        selected =
-            current == modality
-
-        selectedStyle =
-            [ Background.color (rgb255 255 255 255)
-            , Font.color (rgb255 0 0 0)
-            ]
+                _ ->
+                    0
     in
-    Input.button
-        ([ Border.width 1
-         , Border.rounded 5
-         , Border.glow (rgb255 255 255 255) 0.5
-         , padding 5
-         ]
-            ++ (if selected then
-                    selectedStyle
+    Document "Radiology Dashboard"
+        [ div [ class "container-fluid" ]
+            [ div [ class "d-flex flex-row align-items-center gap-4" ]
+                ([ h1 [] [ text "Radiology Dashboard" ]
+                 , viewModalityButtons model
+                 ]
+                    ++ (if hiddenCount == 0 then
+                            []
 
-                else
-                    []
-               )
-        )
-        { onPress = Just <| ChangeModality modality
-        , label = text <| case modality of 
-            XR -> "XR"
-            CT -> "CT"
-            MR -> "MR"
-            DSA -> "DSA"
-            NM -> "NM"
-            US -> "US"
-         }
-
-
-viewTimeInfo : Model -> Element Msg
-viewTimeInfo model =
-    let
-        dataTimestamp =
-            case model.dataTimestamp of
-                Just time ->
-                    dateFormatter nz_zone time
-
-                Nothing ->
-                    "N/A"
-
-        viewTime =
-            column [ Font.family [ Font.monospace ], alignRight, Font.size 12 ]
-                [ row [ alignRight ] [ text "Last refresh: ", el [] (text <| dataTimestamp) ]
-                -- , row [ alignRight ] [ text "Current time: ", el [] (text <| currentTimestamp) ]
-                ]
-    in
-    el [ Element.inFront viewTime, alignTop ] Element.none
-
-
-viewNotesOverlay : { a | showNotes : Maybe ShowNotesTypes } -> Element Msg
-viewNotesOverlay model =
-    let
-        parseNotes: List String -> Element Msg
-        parseNotes content =
-
-            el[ alignBottom
-            , padding 20
-            , width fill
-            , height (shrink |> maximum 500)
-            , Element.scrollbars
-            , Background.color (rgb255 255 255 255)
-            , Font.size 16
-            , Font.color (rgb255 0 0 0)
-            , Element.inFront
-                (el
-                    [ alignTop
-                    , alignRight
-                    , padding 1
-                    , Events.onMouseDown (ShowNotes Nothing)
-                    , Element.pointer
-                    , width (Element.px 20)
-                    , height (Element.px 20)
-                    , Font.center
-                    ]
-                    (text "x")
+                        else
+                            [ div [ class "form-check", class "form-switch" ]
+                                [ input [ type_ "checkbox", id "showHidden", class "form-check-input", checked model.showHiddenReferrals, onCheck ShowHiddenReferrals ] []
+                                , label [ for "showHidden", class "form-check-label" ] [ "Show " ++ String.fromInt hiddenCount ++ " hidden" |> text ]
+                                ]
+                            ]
+                       )
+                    ++ (Maybe.map (viewTimeInfo >> div [ class "ms-auto" ] >> List.singleton) model.dataTimestamp |> Maybe.withDefault [])
                 )
+            , div [ class "row" ]
+                [ case ( model.dataTimestamp, model.result ) of
+                    ( Just dataTimestamp, Ok studies ) ->
+                        viewTable dataTimestamp model studies
+
+                    ( _, Err err ) ->
+                        viewError err
+
+                    ( Nothing, _ ) ->
+                        text "Loading.."
+                ]
             ]
-            <|
-            el [ centerX, padding 5 ] <|
-            textColumn[] <| List.map (\note -> el[] <| text note) <| content
-                        
-    in
-    case model.showNotes of
-        Just (ShowGeneralNotes content) ->
-            parseNotes content
+        ]
 
-        Just (ShowRadNotes content) ->
-            parseNotes content
 
-        Nothing ->
-            Element.none
+viewModalityButton : Modality -> Modality -> Html Msg
+viewModalityButton current modality =
+    button
+        [ onClick (ChangeModality modality)
+        , class "btn"
+        , class "btn-outline-primary"
+        , classList
+            [ ( "active", current == modality )
+            ]
+        ]
+        [ text
+            (case modality of
+                XR ->
+                    "XR"
+
+                CT ->
+                    "CT"
+
+                MR ->
+                    "MR"
+
+                DSA ->
+                    "DSA"
+
+                NM ->
+                    "NM"
+
+                US ->
+                    "US"
+            )
+        ]
+
+
+viewModalityButtons : Model -> Html Msg
+viewModalityButtons model =
+    [ XR
+    , CT
+    , MR
+    , US
+    , NM
+    , DSA
+    ]
+        |> List.map (viewModalityButton model.modality)
+        |> div [ class "btn-group" ]
+
+
+viewTimeInfo : Time.Posix -> List (Html Msg)
+viewTimeInfo time =
+    [ text "Last refresh: "
+    , dateFormatter nz_zone time |> text
+    ]
 
 
 dateFormatter : Time.Zone -> Time.Posix -> String
@@ -380,7 +354,8 @@ dateFormatter =
         , DateFormat.minuteFixed
         ]
 
-viewError : Http.Error -> Element Msg
+
+viewError : Http.Error -> Html Msg
 viewError err =
     (case err of
         BadBody b ->
@@ -398,205 +373,126 @@ viewError err =
         BadStatus status ->
             "Bad status: " ++ String.fromInt status
     )
-    |> text
-    |> el
-        [ Font.size 12
-        , Font.family [ Font.monospace ]
-        ]
-
-viewTable : Maybe Time.Posix -> List Study -> Element Msg
-viewTable time studies =
-    el [ width shrink ] <|
-        Element.table
-            [ padding 5
-            , centerX
-
-            -- , width shrink
-            , Border.color <| rgb255 111 195 223
-            , Border.width 2
-            , Border.rounded 5
-            ]
-            { data = studies
-            , columns =
-                [ { header = el [ headerBorder, headerPadding, Font.alignLeft ] <| text "Name"
-                    , width = fillPortion 2
-                    , view =
-                        \study ->
-                            el
-                                [ rowPadding
-                                , Font.alignLeft
-                                ]
-                            <| text <| study.pa_surname ++ ", " ++ study.pa_firstname
-                    }
-                , { header = el [ headerBorder, headerPadding, Font.center ] <| text "NHI"
-                    , width = fill
-                    , view =
-                        \study ->
-                            el
-                                [ rowPadding
-                                , Font.center
-                                , Font.family [ Font.monospace ]
-                                , Font.size 16
-                                ]
-                            <|
-                                el
-                                    [ Background.color (rgb255 223 116 12)
-                                    , Border.rounded 5
-                                    , Font.color (rgb255 0 0 0)
-                                    , centerX
-                                    , padding 3
-                                    ]
-                                    (text study.nhi)
-                    }
-                , { header = el [ headerBorder, headerPadding, Font.alignLeft ] <| text "Examination"
-                    , width = fillPortion 4
-                    , view =
-                        \study ->
-                            row [ rowPadding, spacing 5, Font.size 16 ]
-                                [ Element.paragraph
-                                    [ Font.alignLeft
-                                    , Font.extraBold
-                                    , width (fillPortion 18)
-                                    ]
-                                    [ text study.description ]
-                                , viewNotesIcons study.generalNotes study.radNotes
-                                ]
-                    }
-                , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Referral Time"
-                    , width = fillPortion 2
-                    , view =
-                        \study ->
-                            el
-                                [ rowPadding
-                                , Font.center
-                                , Font.family [ Font.monospace ]
-                                , Font.extraLight
-                                , Font.size 16
-                                ]
-                            <|
-                                text (dateFormatter nz_zone study.received)
-                    }
-                , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Triage Category"
-                    , width = fill
-                    , view =
-                        \study ->
-                            el
-                                [ rowPadding
-                                , Font.color <| rgb255 223 116 12
-                                , Font.center
-                                , Font.family [ Font.monospace ]
-                                , Font.size 16
-                                ]
-                            <|
-                                text <|
-                                    triageCategoryToString study.urgency
-                    }
-                , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Location"
-                    , width = fill
-                    , view =
-                        \study ->
-                            case study.location of
-                                Just location ->
-                                    el
-                                        [ rowPadding
-                                        , Font.center
-                                        , Font.family [ Font.monospace ]
-                                        , Font.size 16
-                                        ]
-                                    <|
-                                        text location
-                                Nothing -> Element.none
-                    }
-                , { header = el [ headerBorder, headerPadding, Font.center ] <| text "Due"
-                    , width = fill
-                    , view =
-                        \study ->
-                            case (dueInTime study, time) of
-                                (Just due, Just t) ->
-                                    let
-                                        diff =
-                                            (Time.posixToMillis due - Time.posixToMillis t) // (1000 * 60 * 60)
-
-                                        alpha =
-                                            if diff < 0 then
-                                                1.0
-
-                                            else if diff <= 4 then
-                                                1 - (toFloat diff / 4)
-
-                                            else
-                                                0.0
-                                    in
-                                    el
-                                        [ rowPadding
-                                        , height fill
-                                        , Font.center
-                                        , Font.size 18
-
-                                        -- , height fill
-                                        , Background.color (rgba255 255 0 0 alpha)
-                                        ]
-                                    <|
-                                        text (DateFormat.Relative.relativeTime t due)
-                                        -- text (Time.posixToMillis due |> fromInt)
-
-                                _ ->
-                                    el
-                                        [ rowPadding
-                                        , Font.center
-                                        ]
-                                    <|
-                                        text "-"
-                    }
-                ]
-            }
+        |> text
+        |> List.singleton
+        |> p []
 
 
+viewDue : Time.Posix -> Time.Posix -> String
+viewDue t due =
+    DateFormat.Relative.relativeTime t due
 
-viewNotesIcons : List String -> List String -> Element Msg
-viewNotesIcons generalNotes radNotes =
+
+viewNotesCell : Bool -> Study -> List (Html Msg)
+viewNotesCell showRadNotes study =
     let
-        viewGeneralNotes : List String -> Element Msg
-        viewGeneralNotes content =
-            if List.isEmpty content then Element.none
-            else el
-                [ Background.color (rgb255 0 0 255)
-                , Font.center
-                , Font.bold
-                , Font.family [ Font.serif ]
-                , Border.rounded 10
-                , alignRight
-                , padding 2
-                , width (Element.px 20)
-                , height (Element.px 20)
-                , Element.pointer
-                , Events.onClick (ShowNotes <| Just (ShowGeneralNotes content))
-                ]
-                (text "i")
+        viewNotes : List String -> List String -> List (Html Msg)
+        viewNotes notes classes =
+            if List.isEmpty notes then
+                []
 
-        viewRadNotes : List String -> Element Msg
-        viewRadNotes content =
-            if List.isEmpty content then Element.none
-            else el
-                    [ Background.color (rgb255 255 255 0)
-                    , Font.center
-                    , Font.bold
-                    , Font.color (rgb255 0 0 0)
-                    , Border.rounded 10
-                    , alignRight
-                    , padding 2
-                    , width (Element.px 20)
-                    , height (Element.px 20)
-                    , Element.pointer
-                    , Events.onClick (ShowNotes <| Just (ShowRadNotes content))
-                    ]
-                    (text "R")
+            else
+                notes |> List.intersperse " • " |> String.concat |> text |> List.singleton |> div (List.map class classes) |> List.singleton
     in
-    if List.isEmpty generalNotes && List.isEmpty radNotes then Element.none
-    else row [ width (fillPortion 1), spacing 10 ]
-        [ viewGeneralNotes generalNotes
-        , viewRadNotes radNotes
-        ]
+    viewNotes study.generalNotes []
+        ++ (if List.isEmpty study.radNotes || not showRadNotes then
+                []
+
+            else
+                viewNotes study.radNotes [ "text-primary" ]
+           )
+
+
+viewRow : Time.Posix -> Model -> Study -> Maybe (Html Msg)
+viewRow time model study =
+    let
+        showRadNotes =
+            Set.member study.id model.showRadNotes
+
+        hidden =
+            Set.member study.id model.hiddenReferrals
+
+        due =
+            dueInTime study
+    in
+    if model.showHiddenReferrals || not hidden then
+        tr [ classList [ ( "table-secondary", hidden ) ] ]
+            [ td []
+                [ img
+                    [ src
+                        ("/visibility_"
+                            ++ (if hidden then
+                                    "off"
+
+                                else
+                                    "on"
+                               )
+                            ++ ".svg"
+                        )
+                    , class "btn"
+                    , class "btn-light"
+                    , class "btn-sm"
+                    , onClick (ShowReferral study.id hidden)
+                    ]
+                    []
+                ]
+            , td [ class "user-select-all" ] [ text study.nhi ]
+            , td [] [ study.pa_surname ++ ", " ++ study.pa_firstname |> text ]
+            , td [] [ text study.description ]
+            , td [] [ study.site ++ "-" ++ study.pa_type |> text ]
+            , td [ classList [ ( "table-warning", locationToTriageCategory study.location <= 1 ) ] ] (study.location |> Maybe.map (text >> List.singleton) |> Maybe.withDefault [])
+            , td [] [ dateFormatter nz_zone study.received |> text ]
+            , td [ "table-" ++ triageCategoryToColourVariant study.urgency |> class ] [ triageCategoryToString study.urgency |> text ]
+            , td [ classList [ ( "table-warning", due |> Maybe.map (Time.posixToMillis >> (>) (Time.posixToMillis time)) |> Maybe.withDefault False ) ] ] [ Maybe.map (viewDue time) due |> Maybe.withDefault "-" |> text ]
+            , td [ class "w-25" ]
+                [ div [ class "d-flex gap-2 align-items-start" ]
+                    [ div []
+                        [ img
+                            [ src "/clinical_notes.svg"
+                            , class "btn"
+                            , class "btn-light"
+                            , class "btn-sm"
+                            , classList
+                                [ ( "active", showRadNotes )
+                                , ( "d-none", List.isEmpty study.radNotes )
+                                ]
+                            , onClick (not showRadNotes |> ShowRadNotes study.id)
+                            ]
+                            []
+                        ]
+                    , div [] <| viewNotesCell showRadNotes study
+                    ]
+                ]
+            ]
+            |> Just
+
+    else
+        Nothing
+
+
+viewTable : Time.Posix -> Model -> List Study -> Html Msg
+viewTable time model studies =
+    [ [ ""
+      , "NHI"
+      , "Name"
+      , "Examination"
+      , "Site"
+      , "Location"
+      , "Referral Time"
+      , "Triage Category"
+      , "Due"
+      , "Notes"
+      ]
+        |> List.map text
+        |> List.map (List.singleton >> th [ scope "col" ])
+        |> tr []
+        |> List.singleton
+        |> thead []
+    , studies
+        |> List.filterMap (viewRow time model)
+        |> tbody []
+    ]
+        |> table [ class "table table-sm table-hover" ]
 
 
 dueInTime : Study -> Maybe Time.Posix
@@ -612,17 +508,15 @@ dueInTime study =
             referralTimeInPosix + triageHour * 60 * 60 * 1000
 
         locationBasedDue =
-            referralTimeInPosix + locationToUrgency study.location * 60 * 60 * 1000
+            referralTimeInPosix + locationToTriageCategory study.location * 60 * 60 * 1000
     in
     if triageHour >= 1009 then
         -- Ignore not triaged, planned etc.
         Nothing
 
-    else if triageBasedDue >= locationBasedDue then
-        Just (Time.millisToPosix locationBasedDue)
-
     else
-        Just (Time.millisToPosix triageBasedDue)
+        Just (min triageBasedDue locationBasedDue |> Time.millisToPosix)
+
 
 
 -- HTTP
@@ -631,37 +525,94 @@ dueInTime study =
 fetchData : Time.Posix -> Modality -> Cmd Msg
 fetchData timestamp modality =
     Http.get
-        { url = "https://api.easyrad.duckdns.org/dashboard/" ++ case modality of 
-                XR -> "XR"
-                CT -> "CT"
-                MR -> "MR"
-                DSA -> "DS"
-                NM -> "NM"
-                US -> "US"
-        , expect = expectJson (GotResult timestamp) (list studyDecoder)
+        { url =
+            "https://api.easyrad.duckdns.org/dashboard/"
+                ++ (case modality of
+                        XR ->
+                            "XR"
+
+                        CT ->
+                            "CT"
+
+                        MR ->
+                            "MR"
+
+                        DSA ->
+                            "DS"
+
+                        NM ->
+                            "NM"
+
+                        US ->
+                            "US"
+                   )
+        , expect = expectJson (GotResult timestamp) (list studyDecoder |> Json.Decode.map sortByScore)
         }
+
+
+triageCategoryToColourVariant : TriageCategory -> String
+triageCategoryToColourVariant category =
+    case category of
+        0 ->
+            "danger"
+
+        1 ->
+            "warning"
+
+        4 ->
+            "success"
+
+        24 ->
+            "info"
+
+        _ ->
+            "light"
 
 
 triageCategoryToString : TriageCategory -> String
 triageCategoryToString category =
     case category of
-        0 -> "STAT"
-        1 -> "1 hour"
-        4 -> "4 hours"
-        24 -> "24 hours"
-        48 -> "2 days"
-        336 -> "2 weeks"
-        672 -> "4 weeks"
-        1008 -> "6 weeks"
-        1009 -> "DAROT"
-        1010 -> "Planned"
-        9999 -> "Not triaged"
-        _ -> "-"
+        0 ->
+            "STAT"
+
+        1 ->
+            "1 hour"
+
+        4 ->
+            "4 hours"
+
+        24 ->
+            "24 hours"
+
+        48 ->
+            "2 days"
+
+        336 ->
+            "2 weeks"
+
+        672 ->
+            "4 weeks"
+
+        1008 ->
+            "6 weeks"
+
+        1009 ->
+            "DAROT"
+
+        1010 ->
+            "Planned"
+
+        9999 ->
+            "Not triaged"
+
+        _ ->
+            "-"
 
 
 studyDecoder : Decoder Study
 studyDecoder =
     succeed Study
+        |> required "id" int
         |> required "site" string
         |> required "description" string
         |> required "nhi" string
@@ -674,49 +625,48 @@ studyDecoder =
         |> required "gen_notes" (list string)
         |> required "rad_notes" (list string)
 
+
 triageCategoryDecoder : Decoder TriageCategory
 triageCategoryDecoder =
     let
         parseTriageCategory triage =
             case triage of
-                "STAT" -> 0
-                "1 hour" -> 1
-                "4 hours" -> 4
-                "24 hours" -> 24
-                "2 days" -> 48
-                "2 weeks" -> 336
-                "4 weeks" -> 672
-                "6 weeks" -> 1008
-                "DAROT" -> 1009
-                "Planned" -> 1010
-                _ -> 99999
+                "STAT" ->
+                    0
+
+                "1 hour" ->
+                    1
+
+                "4 hours" ->
+                    4
+
+                "24 hours" ->
+                    24
+
+                "2 days" ->
+                    48
+
+                "2 weeks" ->
+                    336
+
+                "4 weeks" ->
+                    672
+
+                "6 weeks" ->
+                    1008
+
+                "DAROT" ->
+                    1009
+
+                "Planned" ->
+                    1010
+
+                _ ->
+                    99999
     in
     map parseTriageCategory string
 
 
 posixDecoder : Decoder Time.Posix
 posixDecoder =
-    map (\i -> Time.millisToPosix (i*1000)) int
-
-
--- Styles
-
-
-headerBorder : Element.Attribute Msg
-headerBorder =
-    Border.widthEach
-        { bottom = 2
-        , left = 0
-        , right = 0
-        , top = 0
-        }
-
-
-headerPadding : Element.Attribute Msg
-headerPadding =
-    Element.paddingEach { top = 10, right = 5, left = 5, bottom = 15 }
-
-
-rowPadding : Element.Attribute Msg
-rowPadding =
-    Element.paddingEach { top = 15, right = 5, left = 5, bottom = 15 }
+    map (\i -> Time.millisToPosix (i * 1000)) int
